@@ -21,15 +21,23 @@ def parse_psl(psl, feature, gff, gff_cols, exons={}):
             match = int(cols[0])
             cols[0] = match
             mrna_name = cols[9]
+            scaffold_name = cols[13]
             blocksizes = [int(x) for x in cols[18].strip(',').split(',')]
             nblocks = len(blocksizes)
             if mrna_name in to_analyze:
-                if match > to_analyze[mrna_name][0]:
-                    to_analyze[mrna_name] = cols
+                if match > to_analyze[mrna_name]['cols'][0]:
+                    to_analyze[mrna_name] = {
+                        'cols': cols,
+                        'scaffold_name': scaffold_name
+                    }
             else:
-                to_analyze[mrna_name] = cols
+                to_analyze[mrna_name] = {
+                    'cols': cols,
+                    'scaffold_name': scaffold_name
+                }
         for mrna_name in to_analyze:
-            cols = to_analyze[mrna_name]
+            cols = to_analyze[mrna_name]['cols']
+            scaffold_name = to_analyze[mrna_name]['scaffold_name']
             # psl uses a 0-based coordinate system
             # while gff uses a 1-based
             tstarts = [int(x)+1 for x in cols[20].strip(',').split(',')]
@@ -85,14 +93,16 @@ def parse_psl(psl, feature, gff, gff_cols, exons={}):
     #                )
                 if len_blocksizes < len_gff:
                     logging.warning(
-                        '"{}" GFF contains blocksizes {} not in PSL'.format(
+                        '"{}" - "{}" GFF contains blocksizes {} not in PSL'.format(
+                            scaffold_name,
                             mrna_name,
                             (', ').join([str(x) for x in gff_sizes - set_blocksizes])
                         )
                     )
                 elif len_gff < len_blocksizes:
                     logging.warning(
-                        '"{}" GFF is missing blocksizes {} in PSL'.format(
+                        '"{}" - "{}" GFF is missing blocksizes {} in PSL'.format(
+                            scaffold_name,
                             mrna_name,
                             (', ').join([str(x) for x in set_blocksizes - gff_sizes])
                         )
