@@ -11,14 +11,18 @@ def parse_psl(psl, feature, gff, gff_cols, exons={}):
     # secondary alignments
     to_analyze = {}
     with open(psl, 'r') as f:
+        logging.debug('Reading psl: {}'.format(psl))
         # Read 5 lines to skip the header
         for i in range(5):
             f.readline()
         for line in f:
+            #logging.debug('parsing line: {}'.format(line))
             cols = line.strip().split('\t')
             match = int(cols[0])
             cols[0] = match
             mrna_name = cols[9]
+            blocksizes = [int(x) for x in cols[18].strip(',').split(',')]
+            nblocks = len(blocksizes)
             if mrna_name in to_analyze:
                 if match > to_analyze[mrna_name][0]:
                     to_analyze[mrna_name] = cols
@@ -29,8 +33,12 @@ def parse_psl(psl, feature, gff, gff_cols, exons={}):
             # psl uses a 0-based coordinate system
             # while gff uses a 1-based
             tstarts = [int(x)+1 for x in cols[20].strip(',').split(',')]
-            strand = cols[8]
             blocksizes = [int(x) for x in cols[18].strip(',').split(',')]
+            logging.debug('mrna_name: {}'.format(mrna_name))
+            logging.debug('cols: {}'.format(cols))
+            logging.debug('tstarts: {}'.format(tstarts))
+            logging.debug('blocksizes: {}'.format(blocksizes))
+            strand = cols[8]
             if exons or exons == {}:
                 # Get the gene name
                 #gene_name = cols[9][:cols[9].rindex('-')]
@@ -102,6 +110,9 @@ def parse_psl(psl, feature, gff, gff_cols, exons={}):
                 out['source'] = 'pslToGff'
                 out['feature'] = feature
                 out['start'] = str(tstarts[i])
+                logging.debug('blocksizes: {}'.format(blocksizes))
+                logging.debug('tstarts: {}'.format(tstarts))
+                logging.debug('i: {}'.format(i))
                 out['end'] = str(tstarts[i] + blocksizes[i])
                 out['score'] = '0'
                 # These boundaries can be fixed in this case
@@ -216,7 +227,7 @@ if __name__ == '__main__':
         out['score'] = '0'
         # These boundaries can be fixed in this case
         out['seqname'] = gene[6:26]
-        out['strand'] = exons[gene][exons[gene].keys()[0]]['strand']
+        out['strand'] = exons[gene][list(exons[gene])[0]]['strand']
         out['frame'] = '0'
         out['attribute'] = 'ID={}'.format(gene)
         print(('\t').join(
