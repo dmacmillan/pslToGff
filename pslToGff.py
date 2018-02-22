@@ -16,7 +16,6 @@ def parse_psl(psl, feature, gff, gff_cols, exons={}):
         for i in range(5):
             f.readline()
         for line in f:
-            #logging.debug('parsing line: {}'.format(line))
             cols = line.strip().split('\t')
             match = int(cols[0])
             cols[0] = match
@@ -49,7 +48,6 @@ def parse_psl(psl, feature, gff, gff_cols, exons={}):
             strand = cols[8]
             if exons or exons == {}:
                 # Get the gene name
-                #gene_name = cols[9][:cols[9].rindex('-')]
                 gene_name = mrna_name.rsplit('-',2)[0]
                 if gene_name not in exons:
                     exons[gene_name] = {
@@ -83,38 +81,28 @@ def parse_psl(psl, feature, gff, gff_cols, exons={}):
             else:
                 len_blocksizes = len(blocksizes)
                 len_gff = len(gff[mrna_name][feature])
-                gff_sizes = set([x[1]-x[0] for x in gff[mrna_name][feature]])
-                set_blocksizes = set([x-1 for x in blocksizes])
-    #            elif len_blocksizes != len_gff:
-    #                gff_sizes = set([x[1]-x[0] for x in gff[mrna_name][feature]])
-    #                set_blocksizes = set(blocksizes)
-    #                logging.warning(
-    #                    'Number of blocks not equal "{}"'.format(mrna_name)
-    #                )
-                if len_blocksizes < len_gff:
+                gff_blocksizes = set([x[1]-x[0] for x in gff[mrna_name][feature]])
+                psl_blocksizes = set([x-1 for x in blocksizes])
+                # If the GFF is missing a block present in PSL
+                in_gff_not_psl = gff_blocksizes - psl_blocksizes
+                # If the PSL is missing a block present in GFF
+                in_psl_not_gff = psl_blocksizes - gff_blocksizes
+                if in_gff_not_psl:
                     logging.warning(
                         '"{}" - "{}" GFF contains blocksizes {} not in PSL'.format(
                             scaffold_name,
                             mrna_name,
-                            (', ').join([str(x) for x in gff_sizes - set_blocksizes])
+                            (', ').join([str(x) for x in gff_blocksizes - psl_blocksizes])
                         )
                     )
-                elif len_gff < len_blocksizes:
+                elif in_psl_not_gff:
                     logging.warning(
                         '"{}" - "{}" GFF is missing blocksizes {} in PSL'.format(
                             scaffold_name,
                             mrna_name,
-                            (', ').join([str(x) for x in set_blocksizes - gff_sizes])
+                            (', ').join([str(x) for x in psl_blocksizes - gff_blocksizes])
                         )
                     )
-#                    'Number of blocks not equal "{}". ' \
-#                    'Ref gff = "{}", psl blocks = "{}"\n' \
-#                    '{}'.format(
-#                        mrna_name,
-#                        gff[mrna_name][feature],
-#                        len(blocksizes),
-#                        cols
-#                    )
             for i,start in enumerate(tstarts):
                 out = {key:None for key in gff_cols}
                 out['source'] = 'pslToGff'
@@ -131,7 +119,8 @@ def parse_psl(psl, feature, gff, gff_cols, exons={}):
                 out['frame'] = '0'
                 attributes = {
                     'ID': '{}:{}:{}'.format(mrna_name, feature, i),
-                    'Parent': mrna_name
+                    'Parent': mrna_name,
+                    'Name': gene_name
                 }
                 out['attribute'] = ('; ').join(
                     [
@@ -155,17 +144,8 @@ if __name__ == '__main__':
     parser.add_argument('-cp', '--cds_psls', nargs='+', help='CDS psl file input')
     #parser.add_argument('-f', '--feature', default='exon', help='A feature name for the gff output, must match the feature names from the gff input')
     parser.add_argument("-l", "--log", dest="logLevel", default='warning', choices=['debug', 'info', 'warning', 'error', 'critical'], help='set the logging level. default = "warning"')
-    #parser.add_argument('-n', '--name', help='Name for file output')
-    #parser.add_argument('-o', '--outdir', default=os.getcwd(), help='Path to output to. Will be created if it does not exist.')
     
     args = parser.parse_args()
-    
-    # Create output directory if it does not exist
-#    if not os.path.isdir(args.outdir):
-#        try:
-#            os.makedirs(args.outdir)
-#        except OSError:
-#            logging.warning('Attempted to create {}, but directory may already exist'.format(args.outdir))
     
     # Logging
     logging.basicConfig(
@@ -208,10 +188,6 @@ if __name__ == '__main__':
                 continue
             attributes = dict([x.split('=') for x in attributes.split(';')])
             names = attributes['Parent'].split(',')
-#            try:
-#                name = attributes['ID'][:attributes['ID'].index(':')]
-#            except ValueError:
-#                name = attributes['ID']
             for name in names:
                 if name not in gff:
                     gff[name] = {}
@@ -229,7 +205,7 @@ if __name__ == '__main__':
             parse_psl(psl, 'CDS', gff, gff_cols)
 
     for gene in exons:
-        out = {key:None for key in gff_cols}
+        out = {key:'NA' for key in gff_cols}
         out['source'] = 'pslToGff'
         out['feature'] = 'gene'
         out['start'] = str(min([exons[gene][x]['start'] for x in exons[gene]]))
@@ -239,7 +215,18 @@ if __name__ == '__main__':
         out['seqname'] = gene[6:26]
         out['strand'] = exons[gene][list(exons[gene])[0]]['strand']
         out['frame'] = '0'
-        out['attribute'] = 'ID={}'.format(gene)
+        #out['attribute'] = 'ID={}'.format(gene)
+        # Added Name attribute to allow for grouping
+        attributes = {
+            'ID': gene,
+            'Name': gene
+        }
+        out['attribute'] = ('; ').join(
+            [
+                '{}={}'.format(k,v) for k,v in attributes.items()
+            ]
+        )
+
         print(('\t').join(
             [out[key] for key in gff_cols]
         ))
@@ -250,7 +237,8 @@ if __name__ == '__main__':
             # These boundaries can be fixed in this case
             attributes = {
                 'ID': mrna,
-                'Parent': gene
+                'Parent': gene,
+                'Name': gene
             }
             out['attribute'] = ('; ').join(
                 [
