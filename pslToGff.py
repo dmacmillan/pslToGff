@@ -114,7 +114,8 @@ def parse_psl(psl, feature, gff, gff_cols, exons={}):
                 out['end'] = str(tstarts[i] + blocksizes[i])
                 out['score'] = '0'
                 # These boundaries can be fixed in this case
-                out['seqname'] = mrna_name[6:26]
+                #out['seqname'] = mrna_name[6:26]
+                out['seqname'] = scaffold_name
                 out['strand'] = strand
                 out['frame'] = '0'
                 attributes = {
